@@ -1,0 +1,442 @@
+# Panel de Calibración v1 & v2 - Instrucciones para Agente IA
+
+> Este documento define las dos versiones del Panel de Calibración, pensadas para una IA especializada en generación de código. La expectativa es que se implementen ambas versiones de forma secuencial, comenzando por la v1. Se espera que el diseño permita escalar fácilmente de una versión a otra.
+
+---
+
+## 🔢 Versión 1.0 - Live Diagnostics (Básico)
+
+### Objetivo
+
+Crear un panel que consuma los datos en tiempo real del sistema de inferencia + tracker mediante websockets y permita:
+
+- Visualizar inferencias crudas (raw)
+- Visualizar eventos procesados del tracker
+- Mostrar regiones de interés (cama, puerta, zona de riesgo)
+- Mostrar keypoints y bounding boxes
+- Proveer una interfaz visual clara y limpia, enfocada en el diagnóstico en vivo
+
+### Fuentes de Datos
+
+- El sistema recibirá mensajes por WebSocket en uno o más canales:
+    - `inference.tap` → resultados frame a frame del modelo (lista de detecciones)
+    - `tracker.tap` → eventos procesados y regiones activas
+- Ambos canales pueden ser enviados por el **mismo WebSocket**, usando un campo `topic` o similar, o por sockets separados.
+
+#### Ejemplo de mensaje `inference.tap` (con múltiples detecciones):
+
+```json
+{
+  "topic": "inference.tap",
+  "timestamp": 1686154245123,
+  "frame_id": 3001,
+  "detections": [
+    {
+      "person_id": 1,
+      "bbox": [245,180,180,320],
+      "keypoints": [...],
+      "confidence": 0.67,
+      "imov": 0.32
+    },
+    {
+      "person_id": 2,
+      "bbox": [100,160,160,300],
+      "keypoints": [...],
+      "confidence": 0.58,
+      "imov": 0.22
+    }
+  ]
+}
+```
+
+#### Ejemplo de mensaje `tracker.tap` (con detalle de regiones y eventos):
+
+```json
+{
+  "topic": "tracker.tap",
+  "timestamp": 1686154245123,
+  "event": "limb_outside_bed",
+  "event_payload": {
+    "keypoints_outside": ["left_hand"],
+    "distance_cm": 48,
+    "keypoint_confidence": 0.91
+  },
+  "regions": {
+    "bed": {
+      "occupied": false,
+      "confidence": 0.91,
+      "bbox": [400, 300, 800, 600],
+      "keypoints": [[400,300],[1200,300],[1200,900],[400,900]]
+    },
+    "door": {
+      "crossed": false,
+      "bbox": [50,50,200,200],
+      "keypoints": [[50,50],[250,50],[250,250],[50,250]]
+    }
+  },
+  "tracks": [
+    {
+      "person_id": 1,
+      "bbox_smoothed": [248,182,176,318],
+      "keypoints": [...],
+      "stability": 0.88
+    }
+  ]
+}
+```
+
+> Notar que:
+> 
+> - Cada región incluye `bbox` y `keypoints` que definen su geometría exacta.
+> - Cada track incluye también los `keypoints` de la persona además del `bbox`.
+> - Los eventos tienen un `payload` que explica **qué lógica fue evaluada** para tomar la decisión: distancias, keypoints involucrados, confianza, etc.
+
+### Componentes esperados
+
+- **WebSocket Layer**: escucha los canales `inference.tap`, `tracker.tap`
+- **Canvas Overlay (Konva.js)**: dibuja el plano espacial con:
+    - BBoxes crudos (rojo)
+    - BBoxes suavizados (verde)
+    - Keypoints (amarillo, con opacidad según confianza)
+    - Regiones (azul translúcido, con forma real por keypoints)
+- **Live Metrics Panel**: valores actuales (FPS, confianza, tracks activos)
+- **Mini Timeline (no interactiva)**: 10 segundos de histograma continuo para:
+    - Confianza promedio por detección
+    - Cantidad de detecciones por frame
+    - Detección de manos/pies/keypoints críticos
+    - Drop frames
+
+### Estilo visual
+
+- Estética tipo **AutoCAD** o **editor de video**: limpia, sin colores ruidosos
+- Gráficos y tipografía legible
+- Fondo gris claro, con overlays bien diferenciados
+
+### Librerías y stack sugerido
+
+- **React + TypeScript**
+- **Combust (React wrapper)** como framework base
+- **shadcn/ui** para componentes de UI
+- **TailwindCSS** para estilos
+- **Zustand** para manejo de estado
+- **Konva.js** para canvas (via react-konva)
+- **Jansen** o **Takeaway** para charts (línea de tiempo y métricas por frame)
+- Estilo inspirado en Sustan: limpio, minimalista, ordenado
+
+---
+
+## 🔄 Versión 2.0 - Playback y Análisis Temporal (Avanzado)
+
+### Objetivo
+
+Agregar funcionalidad de pausa, exploración temporal y reproducción del buffer de eventos.
+
+### Comportamiento esperado
+
+- El sistema funciona normalmente en **modo Live**.
+- En cualquier momento se puede:
+    - Presionar **"Pause"**: congela el estado y permite navegar hacia atrás 2 minutos
+    - Presionar **"Clip"**: crea un recorte automático de los últimos 2 minutos
+- En modo pausado:
+    - El usuario se mueve libremente por la línea de tiempo
+    - Los histogramas quedan fijos (no se actualizan)
+    - Se pueden ver frame a frame:
+        - Keypoints crudos
+        - Eventos disparados
+        - Cambios en regiones (con forma por keypoints)
+        - Detecciones múltiples y sus atributos
+        - Payload lógico del evento (qué disparó la alerta)
+
+### Visuales y componentes nuevos
+
+- **Timeline Scrubber** (similar a un reproductor): `<< ▶️ >>`
+- **Marcadores de eventos** en la línea de tiempo ("se detectó 2 personas")
+- **Histograma de métricas sincronizado con timeline** (Jansen): confianza, FPS, tracks, IMOV promedio
+- **Modo de visualización congelado**: canvas estático con posibilidad de navegar
+- Posibilidad de exportar buffer a JSON para debugging colaborativo
+
+### Consideraciones para escalabilidad
+
+- El diseño de v1 debe permitir:
+    - Guardar buffer de frames con metadata
+    - Congelar la reproducción sin interferir el stream
+    - Implementar una lógica de grabación y exportación incremental (v3)
+
+---
+
+## 📆 Notas Finales
+
+- El objetivo de este documento es definir **expectativas y límites funcionales**, no controlar los detalles de implementación.
+- Se deja libertad creativa al agente IA para proponer estructuras y patrones de componentes, siempre que cumplan con los principios funcionales, visuales y de extensibilidad planteados.
+- La prioridad es **fluidez, claridad, legibilidad y capacidad de evolucionar**.
+
+---
+
+> Si necesitas ampliar este documento o agregar ejemplos de JSON de entrada/salida, se pueden incluir en un anexo.
+
+
+
+
+
+
+---
+
+
+# Overview Funcional: Tracker vs Inference + Ejemplos por Escenario
+
+Este documento complementa al Panel de Calibración v1 & v2, y está orientado a una IA generadora de código que necesite entender **cómo funciona conceptualmente el sistema de detección (Inference)** y el **sistema de eventos (Tracker)**, además de recibir ejemplos concretos de los distintos escenarios reales que puede encontrarse.
+
+---
+
+## 🧠 ¿Qué es el Inference?
+
+Es el resultado **crudo, frame a frame**, de un modelo de visión artificial (ej. YOLO Pose) que detecta:
+
+- Bounding Boxes por persona
+- Keypoints de cuerpo por persona (pose humana)
+- Confianza de cada detección
+- Atributos derivados (IMOV, área, postura estimada)
+
+Cada frame puede contener **múltiples personas detectadas**, cada una con su propia data.
+
+### JSON Típico de `inference.tap`
+
+```json
+{
+  "timestamp": 1686154245123,
+  "frame_id": 4123,
+  "detections": [
+    {
+      "person_id": 1,
+      "confidence": 0.72,
+      "bbox": [200,300,180,340],
+      "keypoints": [...],
+      "imov": 0.12
+    }
+  ]
+}
+```
+
+---
+
+## 🧡 ¿Qué es el Tracker?
+
+Es un agente que recibe inferencias, mantiene un **estado persistente** entre frames, aplica buffers y lógicas de estabilización, y toma decisiones sobre eventos.
+
+El tracker puede:
+
+- Filtrar y suavizar tracks
+- Mantener regiones (cama, puerta, zona riesgo)
+- Detectar transiciones (entró, salió, se acostó, se levantó)
+- Emitir eventos con contexto lógico explicativo (event_payload)
+
+### JSON Típico de `tracker.tap`
+
+```json
+{
+  "timestamp": 1686154245125,
+  "event": "limb_outside_bed",
+  "event_payload": {
+    "person_id": 1,
+    "keypoints_outside": ["left_hand"],
+    "distance_cm": 45,
+    "confidence": 0.91
+  },
+  "regions": {
+    "bed": {"occupied": true, "confidence": 0.96, ...},
+    ...
+  },
+  "tracks": [ {...} ]
+}
+```
+
+---
+
+## 🛏️ Escenarios Reales + Ejemplos JSON
+
+### 1. Habitación vacía
+
+No se detectan personas.
+
+#### Inference:
+
+```json
+{
+  "frame_id": 4100,
+  "detections": []
+}
+```
+
+#### Tracker:
+
+```json
+{
+  "regions": {
+    "bed": {"occupied": false},
+    "door": {"crossed": false}
+  },
+  "tracks": []
+}
+```
+
+---
+
+### 2. Persona de pie en habitación (no acostada)
+
+Persona dentro de la habitación pero sin entrar a la cama.
+
+#### Inference:
+
+```json
+{
+  "detections": [
+    {
+      "person_id": 1,
+      "bbox": [220,150,160,280],
+      "keypoints": [...],
+      "confidence": 0.75,
+      "imov": 0.40
+    }
+  ]
+}
+```
+
+#### Tracker:
+
+```json
+{
+  "regions": {
+    "bed": {"occupied": false},
+    "door": {"crossed": false}
+  },
+  "tracks": [
+    {
+      "person_id": 1,
+      "bbox_smoothed": [...],
+      "keypoints": [...]
+    }
+  ]
+}
+```
+
+---
+
+### 3. Persona acostada completamente en cama
+
+Todos los keypoints (torso, piernas, brazos) están dentro de los límites definidos como "cama".
+
+#### Inference:
+
+```json
+{
+  "detections": [
+    {
+      "person_id": 1,
+      "bbox": [420,310,190,340],
+      "keypoints": [...],
+      "confidence": 0.80
+    }
+  ]
+}
+```
+
+#### Tracker:
+
+```json
+{
+  "regions": {
+    "bed": {"occupied": true, "confidence": 0.97}
+  },
+  "tracks": [
+    {"person_id": 1, "keypoints": [...], "bbox_smoothed": [...]}
+  ]
+}
+```
+
+---
+
+### 4. Persona acostada, saca una extremidad (evento)
+
+Ejemplo clásico: mano fuera de la cama.
+
+#### Inference:
+
+```json
+{
+  "detections": [
+    {
+      "person_id": 1,
+      "keypoints": [ ..., {"name": "left_hand", "x": 180, "y": 600, "conf": 0.94} ],
+      "confidence": 0.81
+    }
+  ]
+}
+```
+
+#### Tracker:
+
+```json
+{
+  "event": "limb_outside_bed",
+  "event_payload": {
+    "keypoints_outside": ["left_hand"],
+    "distance_cm": 45,
+    "confidence": 0.94
+  },
+  "regions": {
+    "bed": {"occupied": true}
+  }
+}
+```
+
+---
+
+### 5. Persona completamente fuera de la cama
+
+Salió de la cama. Posible transición a "riesgo de caída".
+
+#### Inference:
+
+```json
+{
+  "detections": [
+    {
+      "person_id": 1,
+      "bbox": [100,280,160,300],
+      "keypoints": [...],
+      "confidence": 0.78
+    }
+  ]
+}
+```
+
+#### Tracker:
+
+```json
+{
+  "event": "bed_exit",
+  "event_payload": {
+    "person_id": 1,
+    "all_keypoints_outside_bed": true,
+    "imov": 0.30
+  },
+  "regions": {
+    "bed": {"occupied": false}
+  }
+}
+```
+
+---
+
+## 🔄 Referencias clave
+
+- El Tracker no reenvía la inferencia tal cual, sino que **procesa y decide**.
+- Cada evento debe incluir un `event_payload` explicativo.
+- Las regiones tienen keypoints y geometría real, no solo bounding box.
+- Toda persona detectada en inferencia puede o no ser considerada como "track válida" según sus atributos (confianza, IMOV, etc).
+
+---
+
+> Este documento tiene como objetivo permitir que un agente IA entienda los casos reales que puede encontrarse y simule correctamente la lógica en el frontend. No es exhaustivo, pero cubre los principales escenarios esperables en las residencias geriátricas bajo vigilancia.
+
+Aclarar que si no está clara el documento que la línea de tiempo o lo que guardamos de buffer o sea de línea de tiempo son 2 minutos a 6 fps o sea 120 segundos a 6 frames por segundo no significa esto que la tasa de frames venga menor o sea qué quiero decir muy probablemente el frame nos va la inferencia y el evento nos va a decir su hora su time perfecto no o sea vamos a ver cómo podemos hacer para que nos diga el corrimiento exacto sí pero a ver si nos puede decir corriente exacta porque en realidad puede pasar de que los fps sean en teoría deberían haber sido seis frames por segundo pero ni la inferencia ni el evento nos manda esa esa tasa está bien o sea que nos vamos a quedar con el la última diferencia que hemos tenido no deberíamos tal vez mostrar el parpadeo Y eso viste o sea si se queda sin inferencia en un ah no perdón si el parpadeo detecciones sí qué quiere decir si no viene una inferencia sin detecciones tiene que quedar muy claro porque justamente eso es una de las cosas que queremos ver che cuántas veces el detector se tuvo que comer parpadeos de detección o sea que quiero decir inferencia que decía no hay nadie y en realidad estaba la persona pero no lo llegaba a ver por el umbral o por lo que sea que no lo veía yo me refiero a que si bien nosotros pensamos que nos van a venir 6 frames por segundo muy probablemente no no sea perfecto eso va a haber un momento donde en un segundo no tenemos nosotros la el evento del WhatsApp sí entonces nosotros igual grabamos dos minutos de tiempo real está bien tendremos los baches que tendremos sí o sea de última llenaremos ese segundo sin información no sé si me explico

@@ -1,0 +1,103 @@
+podes armar un documento de arquitectura como separaste los compoentes yo creo que existent claramente secciones que son features cohesivas que solo comparten cierto estado o contexto o ... comunicacion. ten en consideracion si ves que se podria refactorizar en features/<>  y refactoriza el codigo si consideras y luego arma la documentacion. seimpre pensando que esoas secciones princiaples pueden ser trabajadas y evolucionadas por separado... creo que es clave... para la evolucion. puede ser un markdown en una carpeta docs tambien podria existir una memorias tecnicas con las historias de usauario que has implementadado. 
+
+¡Súper pregunta! Tener **convenciones claras de nombres** para cada tipo de documento hace toda la diferencia, sobre todo cuando el equipo (humano o IA) crece o rota. Te armo un resumen de las convenciones típicas y algunos ejemplos adaptados a lo que vimos en Kare Labs y a buenas prácticas de documentación técnica:
+
+---
+
+## Convención general de nombres
+
+```
+TIPO-IDENTIFICADOR_FECHA_TEMA.md
+```
+
+O para estilo blog:
+
+```
+YYYY-MM-DD-tipo-tema.md
+```
+
+---
+
+### Tipos de documentos más comunes
+
+**1. MT = Memoria Técnica**  
+Explica cómo se resolvió una historia de usuario o un requerimiento técnico específico.  
+**Ejemplo:**
+
+- `MT052_2024-06-07_colaboracion-ia-documentacion.md`
+    
+- `2024-06-07-mt-colaboracion-ia-documentacion.md`
+    
+
+---
+
+**2. US = Historia de Usuario**  
+Describe una necesidad o funcionalidad desde la perspectiva del usuario.  
+**Ejemplo:**
+
+- `US123_2024-06-07_alarma-caidas-turno-noche.md`
+    
+- `2024-06-07-us-alarma-caidas-turno-noche.md`
+    
+
+---
+
+**3. ADR = Architecture Decision Record (Registro de Decisión de Arquitectura)**  
+Justifica una decisión clave de arquitectura (por ejemplo, por qué elegimos un framework, un stack, o un patrón de integración IA-humano).  
+**Ejemplo:**
+
+- `ADR017_2024-06-07-inclusion-ia-flujo-colaborativo.md`
+    
+- `2024-06-07-adr-inclusion-ia-flujo-colaborativo.md`
+    
+
+---
+
+**4. LOG / DAILY = Log Diario**  
+Registro de actividad y razonamiento diario (de la IA o del equipo humano).  
+**Ejemplo:**
+
+- `LOG_2024-06-07_gaby.md` (o del agente: `LOG_2024-06-07_agente-ia.md`)
+    
+- `2024-06-07-log-gaby.md`
+    
+
+---
+
+**5. NOTA / BLOG = Entrada de análisis o reflexión**  
+Para artículos, análisis o reflexiones de producto/tecnología (como esta nota):  
+**Ejemplo:**
+
+- `NOTA_2024-06-07_documentacion-viva-ia.md`
+    
+- `2024-06-07-nota-documentacion-viva-ia.md`
+    
+- `2024-06-07-blog-documentacion-viva-ia.md`
+    
+
+---
+
+**6. REF / REFLEXION / REVIEW**  
+Para revisiones o reflexiones sobre el proceso, lecciones aprendidas, post-mortems, etc.  
+**Ejemplo:**
+
+- `REF_2024-06-07_aprendizajes-sprint-5.md`
+    
+- `2024-06-07-ref-aprendizajes-sprint-5.md`
+    
+
+---
+
+## Resumiendo:
+
+- **MT** → Memoria Técnica
+    
+- **US** → Historia de Usuario
+    
+- **ADR** → Decisión de Arquitectura
+    
+- **LOG/DAILY** → Log Diario
+    
+- **NOTA/BLOG** → Nota o entrada de blog
+    
+- **REF/REVIEW** → Reflexión o revisión
